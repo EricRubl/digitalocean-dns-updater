@@ -1,0 +1,11 @@
+logfile: /etc/digitalocean-dns-updater/updater.log
+token: tokenoauthapi
+domain: contoso.com
+interval: 60
+records:
+  - type: MX
+    priority: 1
+  - type: A
+    name: subdomain1
+  - type: A
+    name: subdomain2

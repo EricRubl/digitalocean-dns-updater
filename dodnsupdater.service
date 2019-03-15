@@ -1,0 +1,10 @@
+[Unit]
+Description=DigitalOcean DNS record updater
+After=multi-user.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python3 /etc/digitalocean-dns-updater/updater.py
+
+[Install]
+WantedBy=multi-user.target
