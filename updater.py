@@ -140,7 +140,7 @@ def set_record_ip(domain, record, ip, token):
     except (Exception, urllib.error.HTTPError):
         raise SyncError('Error setting DNS record')
 
-    if result['domain_record']['data'] == ip:
+    if result['domain_record']['data'] != ip:
         LOGGER.warning('DNS record did not update accordingly')
 
 
@@ -172,11 +172,11 @@ def sync(config):
 
             # update other records according to config file
             for record in config.records:
-                if record.type == 'A':
-                    a_record = get_record(config.domain, record.name, 'A', config.token)
+                if record.get('type') == 'A':
+                    a_record = get_record(config.domain, record.get('name'), 'A', config.token)
                     set_record_ip(config.domain, a_record, actual_ip, config.token)
                     LOGGER.info('Updated %s A record with IP %s'.format(record.name + '.' + config.domain, actual_ip))
-                elif record.type == 'MX':
+                elif record.get('type') == 'MX':
                     mx_record = get_record(config.domain, '@', 'MX', config.token)
                     set_record_ip(config.domain, mx_record, actual_ip, config.token)
                     LOGGER.info('Updated %s MX record with IP %s'.format(config.domain, actual_ip))
