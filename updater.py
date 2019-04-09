@@ -2,12 +2,14 @@ import datetime
 import json
 import logging
 import sys
+import syslog
 import time
 import urllib.error
 import urllib.request
+from functools import wraps
+
 import yaml
 
-from functools import wraps
 from job import Job
 
 APIURL = "https://api.digitalocean.com/v2"
@@ -26,7 +28,7 @@ class Config:
     def __init__(self):
         try:
             with open('/etc/digitalocean-dns-updater/config.yml', 'r') as f:
-                self.config = yaml.load(f)
+                self.config = yaml.load(f, Loader=yaml.FullLoader)
         except IOError:
             raise ConfigException('Error opening config file')
 
@@ -72,7 +74,7 @@ def retry(times=5, delay=1.0, exceptions=(Exception, urllib.error.HTTPError)):
 
 
 def generate_request_headers(token, extra_headers=None):
-    rv = {'Authorization': "Bearer %s" % token}
+    rv = {'Authorization': "Bearer {}".format(token)}
     if extra_headers:
         rv.update(extra_headers)
     return rv
@@ -107,7 +109,7 @@ def get_external_ip():
 
 
 def get_record(domain, name, rtype, token):
-    url = "%s/domains/%s/records" % (APIURL, domain)
+    url = "{}/domains/{}/records".format(APIURL, domain)
 
     while True:
         try:
@@ -127,11 +129,11 @@ def get_record(domain, name, rtype, token):
         else:
             break
 
-    raise SyncError("Could not find DNS record %s".format(name + ' ' + rtype))
+    raise SyncError("Could not find DNS record {}".format(name + ' ' + rtype))
 
 
 def set_record_ip(domain, record, ip, token):
-    url = "%s/domains/%s/records/%s".format(APIURL, domain, record['id'])
+    url = "{}/domains/{}/records/{}".format(APIURL, domain, record['id'])
     data = json.dumps({'data': ip}).encode('utf-8')
     headers = generate_request_headers(token, {'Content-Type': 'application/json'})
 
@@ -155,31 +157,27 @@ def get_dns_ip(domain, token):
 
 
 def sync(config):
-    LOGGER.info('Sync started')
     try:
         dns_ip = get_dns_ip(config.domain, config.token)
         actual_ip = get_external_ip()
 
-        LOGGER.info(dns_ip + '|' + actual_ip)
-
         if dns_ip != actual_ip:
-            LOGGER.info('External IP changed from %s to %s'.format(dns_ip, actual_ip))
+            LOGGER.info('External IP changed from {} to {}'.format(dns_ip, actual_ip))
 
             # update root A record
             root_a_record = get_record(config.domain, '@', 'A', config.token)
             set_record_ip(config.domain, root_a_record, actual_ip, config.token)
-            LOGGER.info('Updated %s A record with IP %s'.format(config.domain, actual_ip))
+            LOGGER.info('Updated {} A record with IP {}'.format(config.domain, actual_ip))
 
             # update other records according to config file
             for record in config.records:
                 if record.get('type') == 'A':
                     a_record = get_record(config.domain, record.get('name'), 'A', config.token)
                     set_record_ip(config.domain, a_record, actual_ip, config.token)
-                    LOGGER.info('Updated %s A record with IP %s'.format(record.name + '.' + config.domain, actual_ip))
-                elif record.get('type') == 'MX':
-                    mx_record = get_record(config.domain, '@', 'MX', config.token)
-                    set_record_ip(config.domain, mx_record, actual_ip, config.token)
-                    LOGGER.info('Updated %s MX record with IP %s'.format(config.domain, actual_ip))
+                    LOGGER.info('Updated {} A record with IP {}'.format(record.get('name') + '.' + config.domain,
+                                                                        actual_ip))
+        else:
+            syslog.syslog(syslog.LOG_INFO, 'External IP {} did not change'.format(actual_ip))
     except SyncError as ex:
         LOGGER.error(str(ex))
 
