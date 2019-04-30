@@ -35,6 +35,7 @@ class Config:
         self.token = self.config.get('token')
         self.interval = self.config.get('interval')
         self.records = self.config.get('records')
+        self.update_main_record = self.config.get('update_main_record')
 
         if not self.logfile:
             raise ConfigException('No logfile provided')
@@ -144,9 +145,17 @@ def set_record_ip(domain, record, ip, token):
         LOGGER.warning('DNS record did not update accordingly')
 
 
-def get_dns_ip(domain, token):
-    root_a_record = get_record(domain, '@', 'A', token)
-    dns_ip = root_a_record.get('data')
+def get_dns_ip(config):
+    if config.update_main_record:
+        record_name = '@'
+        record_type = 'A'
+    else:
+        # Use the first record
+        record_name = config.records[0].get('name')
+        record_type = config.records[0].get('type')
+
+    record = get_record(config.domain, record_name, record_type, config.token)
+    dns_ip = record.get('data')
 
     if dns_ip is not None:
         return dns_ip
@@ -156,16 +165,17 @@ def get_dns_ip(domain, token):
 
 def sync(config):
     try:
-        dns_ip = get_dns_ip(config.domain, config.token)
+        dns_ip = get_dns_ip(config)
         actual_ip = get_external_ip()
 
         if dns_ip != actual_ip:
             LOGGER.info('External IP changed from {} to {}'.format(dns_ip, actual_ip))
 
-            # update root A record
-            root_a_record = get_record(config.domain, '@', 'A', config.token)
-            set_record_ip(config.domain, root_a_record, actual_ip, config.token)
-            LOGGER.info('Updated {} A record with IP {}'.format(config.domain, actual_ip))
+            if config.update_main_record:
+                # update root A record
+                root_a_record = get_record(config.domain, '@', 'A', config.token)
+                set_record_ip(config.domain, root_a_record, actual_ip, config.token)
+                LOGGER.info('Updated {} A record with IP {}'.format(config.domain, actual_ip))
 
             # update other records according to config file
             for record in config.records:
