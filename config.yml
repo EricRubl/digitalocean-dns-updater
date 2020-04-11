@@ -1,7 +1,9 @@
+
 logfile: /etc/digitalocean-dns-updater/updater.log
 token: tokenoauthapi
 domain: contoso.com
 interval: 60
+update_main_record: true
 records:
   - type: MX
     priority: 1
